@@ -1,0 +1,9 @@
+// +build linux freebsd darwin
+
+package file
+
+import "os"
+
+func openFile(name string, flag int, perm os.FileMode) (*os.File, error) {
+	return os.OpenFile(name, flag, perm)
+}
