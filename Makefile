@@ -12,7 +12,6 @@ setup:
 	go get -u golang.org/x/tools/cmd/goimports
 	go get -u golang.org/x/lint/golint
 	go get -u github.com/kyoh86/richgo
-	go get -u github.com/mattn/go-colorable/cmd/colorable
 	go mod tidy
 
 # development tasks
@@ -29,7 +28,7 @@ vet:
 	go vet $(PACKAGES)
 
 test:
-	richgo test -v -race $(PACKAGES) | colorable
+	richgo test -v -race $(PACKAGES)
 
 test.nocache:
-	richgo test -count=1 -v -race $(PACKAGES) | colorable
+	richgo test -count=1 -v -race $(PACKAGES)
