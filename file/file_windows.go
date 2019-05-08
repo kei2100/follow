@@ -65,7 +65,7 @@ func open(path string, mode int, perm uint32) (fd syscall.Handle, err error) {
 // - os.openFile
 func openFile(name string, flag int, perm os.FileMode) (*os.File, error) {
 	if name == "" {
-		return nil, &os.PathError{"open", name, syscall.ENOENT}
+		return nil, &os.PathError{Op: "open", Path: name, Err: syscall.ENOENT}
 	}
 	r, e := open(name, flag|syscall.O_CLOEXEC, syscallMode(perm))
 	if e != nil {
