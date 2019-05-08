@@ -1,0 +1,27 @@
+os: Visual Studio 2017
+
+stack: go 1.12.3
+
+clone_folder: C:\follow
+
+environment:
+  GOPATH: C:\gopath
+  PATH: C:\gopath\bin;C:\msys64\mingw64\bin\;C:\Program Files (x86)\NSIS\;%PATH%
+
+install:
+  - go env
+  - go version
+  - gcc --version
+
+  - choco install -y make
+  - make setup
+
+before_build:
+  - make lint vet
+
+build_script:
+  - make test
+
+test: off
+
+deploy: off
