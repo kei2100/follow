@@ -13,7 +13,7 @@ func stat(file *os.File) (*FileStat, error) {
 	h := syscall.Handle(file.Fd())
 	var d syscall.ByHandleFileInformation
 	if err := syscall.GetFileInformationByHandle(h, &d); err != nil {
-		return nil, &os.PathError{"GetFileInformationByHandle", file.Name(), err}
+		return nil, &os.PathError{Op: "GetFileInformationByHandle", Path: file.Name(), Err: err}
 	}
 	return &FileStat{
 		Vol:   d.VolumeSerialNumber,
