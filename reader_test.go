@@ -2,7 +2,6 @@ package follow
 
 import (
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"testing"
@@ -28,7 +27,7 @@ func TestNoPositionFile(t *testing.T) {
 		r := mustOpen(f.Name())
 		defer r.Close()
 
-		log.Println(f.WriteString("foo"))
+		f.WriteString("foo")
 		wantRead(t, r, "fo")
 		wantPositionFile(t, r.positionFile, fileStat, 2)
 
