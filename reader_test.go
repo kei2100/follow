@@ -310,30 +310,6 @@ func TestNoPositionFile(t *testing.T) {
 		})
 	})
 
-	t.Run("Follow Rotate", func(t *testing.T) {
-		t.Parallel()
-
-		td := testutil.CreateTempDir()
-		defer td.RemoveAll()
-
-		old, _ := td.CreateFile("test.log")
-		oldc := testutil.OnceCloser{C: old}
-		defer oldc.Close()
-
-		r := mustOpenReader(old.Name(), WithWatchRotateInterval(10*time.Millisecond), WithDetectRotateDelay(0))
-		defer r.Close()
-
-		oldc.Close()
-		os.Rename(old.Name(), old.Name()+".bk")
-		current, currentStat := td.CreateFile(filepath.Base(old.Name()))
-		defer current.Close()
-
-		wantDetectRotate(t, r, 500*time.Millisecond)
-		current.WriteString("foo")
-		wantReadAll(t, r, "foo")
-		wantPositionFile(t, r.positionFile, currentStat, 3)
-	})
-
 	t.Run("No Follow Rotate", func(t *testing.T) {
 		t.Parallel()
 
@@ -380,6 +356,7 @@ func TestNoPositionFile(t *testing.T) {
 		wantReadAll(t, r, "foo")
 		wantPositionFile(t, r.positionFile, oldStat, 3)
 
+		wantNoDetectRotate(t, r, 100*time.Millisecond)
 		wantDetectRotate(t, r, time.Second)
 		current.WriteString("barbaz")
 		wantReadAll(t, r, "barbaz")
@@ -429,31 +406,71 @@ func TestWithPositionFile(t *testing.T) {
 	})
 
 	t.Run("Same file not found", func(t *testing.T) {
-		t.Parallel()
+		t.Run("Rotated file not found", func(t *testing.T) {
+			t.Parallel()
 
-		td := testutil.CreateTempDir()
-		defer td.RemoveAll()
+			td := testutil.CreateTempDir()
+			defer td.RemoveAll()
 
-		old, oldStat := td.CreateFile("test.log")
-		oldc := testutil.OnceCloser{C: old}
-		defer oldc.Close()
+			old, oldStat := td.CreateFile("test.log")
+			oldc := testutil.OnceCloser{C: old}
+			defer oldc.Close()
 
-		old.WriteString("foo")
-		oldc.Close()
-		os.Rename(old.Name(), old.Name()+".bk")
-		current, currentStat := td.CreateFile(filepath.Base(old.Name()))
-		defer current.Close()
+			old.WriteString("foo")
+			oldc.Close()
+			os.Rename(old.Name(), old.Name()+".bk")
+			current, currentStat := td.CreateFile(filepath.Base(old.Name()))
+			defer current.Close()
 
-		positionFile := posfile.InMemory(oldStat, 2)
-		r := mustOpenReader(current.Name(), WithPositionFile(positionFile))
-		defer r.Close()
+			positionFile := posfile.InMemory(oldStat, 2)
+			r := mustOpenReader(current.Name(), WithPositionFile(positionFile))
+			defer r.Close()
 
-		wantReadAll(t, r, "")
-		wantPositionFile(t, r.positionFile, currentStat, 0)
+			wantReadAll(t, r, "")
+			wantPositionFile(t, r.positionFile, currentStat, 0)
 
-		current.WriteString("bar")
-		wantReadAll(t, r, "bar")
-		wantPositionFile(t, r.positionFile, currentStat, 3)
+			current.WriteString("bar")
+			wantReadAll(t, r, "bar")
+			wantPositionFile(t, r.positionFile, currentStat, 3)
+		})
+
+		t.Run("Rotated file found", func(t *testing.T) {
+			t.Parallel()
+
+			td := testutil.CreateTempDir()
+			defer td.RemoveAll()
+
+			name := "test.log"
+
+			foo, _ := td.CreateFile(name + ".foo-1") // want ignore
+			foo.WriteString("foo")
+			foo.Close()
+
+			bar, barStat := td.CreateFile(name + ".bar-1") // rotated file
+			bar.WriteString("bar")
+			bar.Close()
+
+			baz, bazStat := td.CreateFile(name) // current file
+			baz.WriteString("baz")
+			baz.Close()
+
+			globs := []string{
+				filepath.Join(td.Path, name+".bar*"),
+				filepath.Join(td.Path, name+".foo*"),
+			}
+			positionFile := posfile.InMemory(barStat, 1)
+			r := mustOpenReader(
+				baz.Name(),
+				WithPositionFile(positionFile),
+				WithRotatedFilePathPatterns(globs),
+				WithWatchRotateInterval(10*time.Millisecond), WithDetectRotateDelay(0),
+			)
+			defer r.Close()
+
+			wantDetectRotate(t, r, 500*time.Millisecond)
+			wantReadAll(t, r, "arbaz")
+			wantPositionFile(t, r.positionFile, bazStat, 3)
+		})
 	})
 }
 

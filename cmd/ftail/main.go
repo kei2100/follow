@@ -6,17 +6,20 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/kei2100/follow"
 )
 
 var (
-	positionFilePath string
+	positionFilePath    string
+	rotatedFilePatterns string
 )
 
 func init() {
 	flag.StringVar(&positionFilePath, "position-file", "", "position-file path")
+	flag.StringVar(&rotatedFilePatterns, "rotated-file-patterns", "", "comma-separated rotated file glob patterns")
 }
 
 func main() {
@@ -40,7 +43,11 @@ func main() {
 		panic(err)
 	}
 
-	r, err := follow.Open(subject, pf)
+	r, err := follow.Open(
+		subject,
+		pf,
+		follow.WithRotatedFilePathPatterns(strings.Split(rotatedFilePatterns, ",")),
+	)
 	if err != nil {
 		panic(err)
 	}
