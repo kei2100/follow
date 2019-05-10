@@ -23,7 +23,7 @@ type OptionFunc func(o *option)
 
 func (o *option) apply(opts ...OptionFunc) {
 	o.followRotate = true
-	o.watchRotateInterval = 200 * time.Millisecond
+	o.watchRotateInterval = 100 * time.Millisecond
 	o.detectRotateDelay = 5 * time.Second
 	for _, fn := range opts {
 		fn(o)
