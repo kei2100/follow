@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/kei2100/follow/stat"
@@ -17,8 +18,6 @@ import (
 type Reader interface {
 	io.ReadCloser
 }
-
-// TODO ? find rotated file
 
 // Open opens the named file and returns the follow.Reader
 func Open(name string, opts ...OptionFunc) (Reader, error) {
@@ -66,9 +65,21 @@ func Open(name string, opts ...OptionFunc) (Reader, error) {
 		}
 	}
 	if !stat.SameFile(fileStat, positionFile.FileStat()) {
-		logger.Printf("follow: file not found that matches fileStat of the positionFile %+v. reset positionFile.", positionFile.FileStat())
-		if err := positionFile.Set(fileStat, fileInfo.Size()); err != nil {
-			return errAndClose(err)
+		logger.Printf("follow: file not found that matches fileStat of the positionFile %+v.", positionFile.FileStat()) // TODO %v
+		sameFile, sameFileStat, sameFileInfo, err := findSameFile(opt.rotatedFilePathPatterns, positionFile.FileStat())
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return errAndClose(err)
+			}
+			logger.Printf("follow: reset positionFile.", positionFile.FileStat())
+			if err := positionFile.Set(fileStat, fileInfo.Size()); err != nil {
+				return errAndClose(err)
+			}
+		} else {
+			logger.Printf("follow: %s matches fileStat of the positionFile.", sameFile.Name())
+			f = sameFile
+			fileStat = sameFileStat
+			fileInfo = sameFileInfo
 		}
 	}
 
@@ -189,7 +200,50 @@ func (r *reader) Close() error {
 	return nil
 }
 
-func watchRotate(done chan struct{}, file *os.File, opt optionRotate) (rotated <-chan struct{}) {
+func findSameFile(globPatterns []string, findStat *stat.FileStat) (*os.File, *stat.FileStat, os.FileInfo, error) {
+	var f *os.File
+	errAndClose := func(tErr error) (*os.File, *stat.FileStat, os.FileInfo, error) {
+		if f != nil {
+			if cErr := f.Close(); cErr != nil {
+				logger.Printf("follow: an error occurred while closing the file %s: %+v", f.Name(), cErr)
+			}
+		}
+		return nil, nil, nil, tErr
+	}
+
+	for _, glob := range globPatterns {
+		entries, err := filepath.Glob(glob)
+		if err != nil {
+			return errAndClose(err)
+		}
+
+		for _, ent := range entries {
+			f, err = file.Open(ent)
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return errAndClose(err)
+			}
+			fileStat, err := stat.Stat(f)
+			if err != nil {
+				return errAndClose(err)
+			}
+			if !stat.SameFile(fileStat, findStat) {
+				continue
+			}
+			// got same file
+			fileInfo, err := f.Stat()
+			if err != nil {
+				return errAndClose(err)
+			}
+			return f, fileStat, fileInfo, nil
+		}
+	}
+	return nil, nil, nil, os.ErrNotExist
+}
+
+func watchRotate(done chan struct{}, file *os.File, followFilePath string, opt optionFollowRotate) (rotated <-chan struct{}) {
 	if !opt.followRotate {
 		return nil
 	}
