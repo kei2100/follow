@@ -31,7 +31,7 @@ func ExampleOpen() {
 	file.WriteString("3")
 	wantReadString(reader, "3")
 
-	// rotate while closing the reader
+	// write and rotate while closing the reader
 	reader.Close()
 	file.WriteString("4")
 	file.Close()
