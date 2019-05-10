@@ -19,6 +19,12 @@ type Logger interface {
 	Println(v ...interface{})
 	// Printf prints v specified format
 	Printf(format string, v ...interface{})
+	// Fatal fatal prints v
+	Fatal(v ...interface{})
+	// Fatalln fatal prints v
+	Fatalln(v ...interface{})
+	// Fatalf fatal prints v specified format
+	Fatalf(format string, v ...interface{})
 }
 
 // Set the logger
@@ -47,4 +53,25 @@ func Printf(format string, v ...interface{}) {
 	loggerMu.RLock()
 	defer loggerMu.RUnlock()
 	logger.Printf(format, v...)
+}
+
+// Fatal calls logger.Fatal
+func Fatal(v ...interface{}) {
+	loggerMu.RLock()
+	defer loggerMu.RUnlock()
+	logger.Fatal(v...)
+}
+
+// Fatalln calls logger.Fatalln
+func Fatalln(v ...interface{}) {
+	loggerMu.RLock()
+	defer loggerMu.RUnlock()
+	logger.Fatalln(v...)
+}
+
+// Fatalf calls logger.Fatalf
+func Fatalf(format string, v ...interface{}) {
+	loggerMu.RLock()
+	defer loggerMu.RUnlock()
+	logger.Fatalf(format, v...)
 }

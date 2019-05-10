@@ -75,6 +75,7 @@ func wantReadString(reader io.Reader, want string) {
 		if read.Len() >= len(want) {
 			break
 		}
+		time.Sleep(follow.DefaultRotateInterval)
 	}
 	if read.String() != want {
 		log.Fatalf("read %s, want %s", read.String(), want)
