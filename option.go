@@ -23,14 +23,14 @@ type OptionFunc func(o *option)
 
 // Default values
 const (
-	DefaultFollowRotate      = true
-	DefaultRotateInterval    = 100 * time.Millisecond
-	DefaultDetectRotateDelay = 5 * time.Second
+	DefaultFollowRotate        = true
+	DefaultWatchRotateInterval = 100 * time.Millisecond
+	DefaultDetectRotateDelay   = 5 * time.Second
 )
 
 func (o *option) apply(opts ...OptionFunc) {
 	o.followRotate = DefaultFollowRotate
-	o.watchRotateInterval = DefaultRotateInterval
+	o.watchRotateInterval = DefaultWatchRotateInterval
 	o.detectRotateDelay = DefaultDetectRotateDelay
 	for _, fn := range opts {
 		fn(o)
