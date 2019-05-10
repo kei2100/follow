@@ -8,9 +8,9 @@ func ExampleOpen() {
 	filename := file.Name()
 
 	// create follow.Reader.
-	// follow.Reader is a file Reader that behaves like `tail -F`
+	// follow.Reader is a file Reader that behaves like `tail -F`.
 	options := []follow.OptionFunc{
-		follow.WithPositionFile(posfile.InMemory(nil, 0)),
+		follow.WithPositionFile(posfile.InMemory(nil, 0)), // position-file supported.
 		follow.WithRotatedFilePathPatterns([]string{filename + ".*"}),
 		follow.WithDetectRotateDelay(0),
 	}
