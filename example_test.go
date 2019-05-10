@@ -21,6 +21,7 @@ func ExampleOpen() {
 	// create follow.Reader.
 	// follow.Reader is a file Reader that behaves like `tail -F`
 	options := []follow.OptionFunc{
+		// position-file supported
 		follow.WithPositionFile(posfile.InMemory(nil, 0)),
 		follow.WithRotatedFilePathPatterns([]string{filename + ".*"}),
 		follow.WithDetectRotateDelay(0),
