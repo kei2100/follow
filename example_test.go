@@ -1,7 +1,18 @@
-# follow
-A file Reader that behaves like `tail -F`
+package follow_test
 
-```go
+import (
+	"bytes"
+	"context"
+	"io"
+	"io/ioutil"
+	"log"
+	"os"
+	"time"
+
+	"github.com/kei2100/follow"
+	"github.com/kei2100/follow/posfile"
+)
+
 func ExampleOpen() {
 	// create tempfile.
 	file, _ := ioutil.TempFile("", "*.log")
@@ -31,7 +42,7 @@ func ExampleOpen() {
 	file.WriteString("3")
 	wantReadString(reader, "3")
 
-	// rotate while closing the reader
+	// write and rotate while closing the reader
 	reader.Close()
 	file.WriteString("4")
 	file.Close()
@@ -42,5 +53,29 @@ func ExampleOpen() {
 
 	reader, _ = follow.Open(filename, options...)
 	wantReadString(reader, "45")
+
+	// Output:
 }
-```
+
+func wantReadString(reader io.Reader, want string) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	var read bytes.Buffer
+	for {
+		if err := ctx.Err(); err != nil {
+			log.Fatal(err)
+		}
+		b, err := ioutil.ReadAll(reader)
+		if err != nil {
+			panic(err)
+		}
+		read.Write(b)
+		if read.Len() >= len(want) {
+			break
+		}
+	}
+	if read.String() != want {
+		log.Fatalf("read %s, want %s", read.String(), want)
+	}
+}
