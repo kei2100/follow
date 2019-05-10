@@ -7,9 +7,13 @@ import (
 )
 
 type option struct {
+	positionFile posfile.PositionFile
+	optionFollowRotate
+}
+
+type optionFollowRotate struct {
 	detectRotateDelay   time.Duration
 	followRotate        bool
-	positionFile        posfile.PositionFile
 	watchRotateInterval time.Duration
 }
 
