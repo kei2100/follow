@@ -48,6 +48,9 @@ func WithPositionFile(positionFile posfile.PositionFile) OptionFunc {
 
 // WithPositionFilePath let you change positionFile
 func WithPositionFilePath(path string) (OptionFunc, error) {
+	if path == "" {
+		return WithPositionFile(nil), nil
+	}
 	pf, err := posfile.Open(path)
 	if err != nil {
 		return nil, err

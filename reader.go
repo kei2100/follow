@@ -95,25 +95,28 @@ type reader struct {
 	watchRotateInterval time.Duration
 	detectRotateDelay   time.Duration
 
-	closed  chan struct{}
-	rotated <-chan struct{}
+	closed                chan struct{}
+	rotated               <-chan struct{}
+	rotatedRemainingBytes chan int64
 }
 
 func newReader(file *os.File, positionFile posfile.PositionFile, opt option) *reader {
-	closed := make(chan struct{})
 	watchRotateInterval := opt.watchRotateInterval
 	detectRotateDelay := opt.detectRotateDelay
+
+	closed := make(chan struct{})
 	var rotated <-chan struct{}
 	if opt.followRotate {
 		rotated = watchRotate(closed, file, watchRotateInterval, detectRotateDelay)
 	}
 	return &reader{
-		file:                file,
-		positionFile:        positionFile,
-		watchRotateInterval: watchRotateInterval,
-		detectRotateDelay:   detectRotateDelay,
-		closed:              closed,
-		rotated:             rotated,
+		file:                  file,
+		positionFile:          positionFile,
+		watchRotateInterval:   watchRotateInterval,
+		detectRotateDelay:     detectRotateDelay,
+		closed:                closed,
+		rotated:               rotated,
+		rotatedRemainingBytes: make(chan int64, 1),
 	}
 }
 
@@ -123,7 +126,7 @@ func (r *reader) Read(p []byte) (n int, err error) {
 	default:
 		n, err := r.file.Read(p)
 		if err != nil {
-			return n, err
+			return 0, err
 		}
 		if err := r.positionFile.IncreaseOffset(n); err != nil {
 			return n, err
@@ -131,23 +134,50 @@ func (r *reader) Read(p []byte) (n int, err error) {
 		return n, nil
 
 	case <-r.rotated:
-		if err := r.file.Close(); err != nil {
+		r.rotated = nil
+
+		// read remaining bytes from rotated files
+		fi, err := r.file.Stat()
+		if err != nil {
 			return 0, err
+		}
+		remainingBytes := fi.Size() - r.positionFile.Offset()
+		r.rotatedRemainingBytes <- remainingBytes
+		return r.Read(p)
+
+	case remainingBytes := <-r.rotatedRemainingBytes:
+		n, err := r.Read(p)
+		if err != nil && err != io.EOF {
+			return n, err
+		}
+		if err != io.EOF {
+			remainingBytes = remainingBytes - int64(n)
+			if remainingBytes > 0 {
+				r.rotatedRemainingBytes <- remainingBytes
+				return n, nil
+			}
+		}
+
+		// finish read remaining bytes from rotated file
+		// open new file
+		if err := r.file.Close(); err != nil {
+			return n, err
 		}
 		f, err := file.Open(r.file.Name())
 		if err != nil {
-			return 0, err
+			return n, err
 		}
 		st, err := stat.Stat(f)
 		if err != nil {
-			return 0, err
+			return n, err
 		}
 		r.file = f
 		if err := r.positionFile.Set(st, 0); err != nil {
-			return 0, err
+			return n, err
 		}
 		r.rotated = watchRotate(r.closed, r.file, r.watchRotateInterval, r.detectRotateDelay)
-		return r.Read(p)
+
+		return n, nil
 	}
 }
 
