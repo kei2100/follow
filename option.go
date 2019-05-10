@@ -21,10 +21,17 @@ type optionFollowRotate struct {
 // OptionFunc let you change follow.Reader behavior.
 type OptionFunc func(o *option)
 
+// Default values
+const (
+	DefaultFollowRotate      = true
+	DefaultRotateInterval    = 100 * time.Millisecond
+	DefaultDetectRotateDelay = 5 * time.Second
+)
+
 func (o *option) apply(opts ...OptionFunc) {
-	o.followRotate = true
-	o.watchRotateInterval = 100 * time.Millisecond
-	o.detectRotateDelay = 5 * time.Second
+	o.followRotate = DefaultFollowRotate
+	o.watchRotateInterval = DefaultRotateInterval
+	o.detectRotateDelay = DefaultDetectRotateDelay
 	for _, fn := range opts {
 		fn(o)
 	}
