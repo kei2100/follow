@@ -156,7 +156,7 @@ func (r *reader) Read(p []byte) (n int, err error) {
 			return n, err
 		}
 		if err != io.EOF {
-			remainingBytes = remainingBytes - int64(n)
+			remainingBytes -= int64(n)
 			if remainingBytes > 0 {
 				r.rotatedRemainingBytes <- remainingBytes
 				return n, nil
@@ -182,7 +182,17 @@ func (r *reader) Read(p []byte) (n int, err error) {
 		}
 		r.rotated = watchRotate(r.closed, r.file, r.followFilePath, r.opt)
 
-		return n, nil
+		switch {
+		case len(p) == n:
+			return n, nil
+		case len(p) > n:
+			pp := p[n:]
+			nn, err := r.Read(pp)
+			return n + nn, err
+		default:
+			logger.Fatalf("follow: unexpected read bytes size %d and bind bytes size %d", len(p), n)
+			return n, nil
+		}
 	}
 }
 
