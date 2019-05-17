@@ -67,13 +67,13 @@ func Open(name string, opts ...OptionFunc) (Reader, error) {
 		}
 	}
 	if !stat.SameFile(fileStat, positionFile.FileStat()) {
-		logger.Printf("follow: file not found that matches fileStat of the positionFile %+v.", positionFile.FileStat()) // TODO %v
+		logger.Printf("follow: file not found that matches fileStat of the positionFile %+v.", positionFile.FileStat())
 		sameFile, sameFileStat, sameFileInfo, err := findSameFile(opt.rotatedFilePathPatterns, positionFile.FileStat())
 		if err != nil {
 			if !os.IsNotExist(err) {
 				return errAndClose(err)
 			}
-			logger.Printf("follow: reset positionFile.", positionFile.FileStat())
+			logger.Printf("follow: reset positionFile %+v.", positionFile.FileStat())
 			//if err := positionFile.Set(fileStat, fileInfo.Size()); err != nil { // TODO option?
 			if err := positionFile.Set(fileStat, 0); err != nil {
 				return errAndClose(err)
