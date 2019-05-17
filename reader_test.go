@@ -474,14 +474,12 @@ func TestWithPositionFile(t *testing.T) {
 	})
 }
 
-// TODO multi goroutine test
-
-func mustOpenReader(name string, opt ...OptionFunc) *reader {
+func mustOpenReader(name string, opt ...OptionFunc) *Reader {
 	r, err := Open(name, opt...)
 	if err != nil {
 		panic(err)
 	}
-	return r.(*reader)
+	return r
 }
 
 func mustOpenfile(name string, flag int) *os.File {
@@ -515,7 +513,7 @@ func wantPositionFile(t *testing.T, positionFile posfile.PositionFile, wantFileS
 	}
 }
 
-func wantRead(t *testing.T, reader *reader, want string) {
+func wantRead(t *testing.T, reader *Reader, want string) {
 	t.Helper()
 
 	if want == "" {
@@ -540,7 +538,7 @@ func wantRead(t *testing.T, reader *reader, want string) {
 	}
 }
 
-func wantReadAll(t *testing.T, reader *reader, want string) {
+func wantReadAll(t *testing.T, reader *Reader, want string) {
 	t.Helper()
 
 	b, err := ioutil.ReadAll(reader)
@@ -556,7 +554,7 @@ func wantReadAll(t *testing.T, reader *reader, want string) {
 	}
 }
 
-func wantDetectRotate(t *testing.T, reader *reader, timeout time.Duration) {
+func wantDetectRotate(t *testing.T, reader *Reader, timeout time.Duration) {
 	t.Helper()
 
 	select {
@@ -567,7 +565,7 @@ func wantDetectRotate(t *testing.T, reader *reader, timeout time.Duration) {
 	}
 }
 
-func wantNoDetectRotate(t *testing.T, reader *reader, wait time.Duration) {
+func wantNoDetectRotate(t *testing.T, reader *Reader, wait time.Duration) {
 	t.Helper()
 
 	select {

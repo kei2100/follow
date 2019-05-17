@@ -14,20 +14,15 @@ import (
 	"github.com/kei2100/follow/posfile"
 )
 
-// Reader interface.
-type Reader interface {
-	io.ReadCloser
-}
-
 // Open opens the named file and returns the follow.Reader
-func Open(name string, opts ...OptionFunc) (Reader, error) {
+func Open(name string, opts ...OptionFunc) (*Reader, error) {
 	opt := option{}
 	opt.apply(opts...)
 
 	var f *os.File
 	var err error
 
-	errAndClose := func(err error) (Reader, error) {
+	errAndClose := func(err error) (*Reader, error) {
 		if f != nil {
 			if cErr := f.Close(); cErr != nil {
 				logger.Printf("follow: an error occurred while closing the file %s: %+v", name, cErr)
@@ -106,7 +101,8 @@ func Open(name string, opts ...OptionFunc) (Reader, error) {
 	return newReader(f, name, positionFile, opt.optionFollowRotate), nil
 }
 
-type reader struct {
+// Reader is a file reader that behaves like tail -F
+type Reader struct {
 	file           *os.File
 	followFilePath string
 	positionFile   posfile.PositionFile
@@ -117,9 +113,9 @@ type reader struct {
 	rotatedRemainingBytes chan int64
 }
 
-func newReader(file *os.File, followFilePath string, positionFile posfile.PositionFile, opt optionFollowRotate) *reader {
+func newReader(file *os.File, followFilePath string, positionFile posfile.PositionFile, opt optionFollowRotate) *Reader {
 	closed := make(chan struct{})
-	return &reader{
+	return &Reader{
 		file:                  file,
 		followFilePath:        followFilePath,
 		positionFile:          positionFile,
@@ -131,7 +127,7 @@ func newReader(file *os.File, followFilePath string, positionFile posfile.Positi
 }
 
 // Read reads up to len(b) bytes from the File.
-func (r *reader) Read(p []byte) (n int, err error) {
+func (r *Reader) Read(p []byte) (n int, err error) {
 	select {
 	default:
 		n, err := r.file.Read(p)
@@ -202,7 +198,7 @@ func (r *reader) Read(p []byte) (n int, err error) {
 }
 
 // Close closes the follow.Reader.
-func (r *reader) Close() error {
+func (r *Reader) Close() error {
 	if r.closed != nil {
 		close(r.closed)
 	}
