@@ -17,12 +17,15 @@ func stat(file *os.File) (*FileStat, error) {
 	if !ok {
 		return nil, fmt.Errorf("follow: unexpected FileInfo.Sys() type. name %s, type %T", file.Name(), fi.Sys())
 	}
-	return &FileStat{Sys: sys}, nil
+	if sys == nil {
+		return nil, fmt.Errorf("follow: FileInfo.Sys() returns nil. name %s", file.Name())
+	}
+	return &FileStat{Sys: *sys}, nil
 }
 
 // FileStat is a os specific file stat
 type FileStat struct {
-	Sys *syscall.Stat_t
+	Sys syscall.Stat_t
 }
 
 // See
