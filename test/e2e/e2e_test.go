@@ -166,8 +166,9 @@ func followReaderOptions() []follow.OptionFunc {
 	}
 	return []follow.OptionFunc{
 		pf,
+		follow.WithDetectRotateDelay(logWait * 10 * 2),
+		follow.WithReadFromHead(true),
 		follow.WithRotatedFilePathPatterns([]string{filepath.Join(tempDir, logName+".*")}),
 		follow.WithWatchRotateInterval(logWait),
-		follow.WithDetectRotateDelay(logWait * 10 * 2),
 	}
 }

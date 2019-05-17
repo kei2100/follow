@@ -54,15 +54,18 @@ func Open(name string, opts ...OptionFunc) (Reader, error) {
 		return errAndClose(err)
 	}
 
+	var initialOffset int64
+	if !opt.readFromHead {
+		initialOffset = fileInfo.Size()
+	}
+
 	positionFile := opt.positionFile
 	if positionFile == nil {
 		logger.Println("follow: positionFile not specified. use in-memory positionFile.")
-		//positionFile = posfile.InMemory(fileStat, fileInfo.Size()) // TODO option?
-		positionFile = posfile.InMemory(fileStat, 0)
+		positionFile = posfile.InMemory(fileStat, initialOffset)
 	}
 	if positionFile.FileStat() == nil {
-		//if err := positionFile.Set(fileStat, fileInfo.Size()); err != nil { // TODO option?
-		if err := positionFile.Set(fileStat, 0); err != nil {
+		if err := positionFile.Set(fileStat, initialOffset); err != nil {
 			return errAndClose(err)
 		}
 	}
@@ -74,8 +77,7 @@ func Open(name string, opts ...OptionFunc) (Reader, error) {
 				return errAndClose(err)
 			}
 			logger.Printf("follow: reset positionFile %+v.", positionFile.FileStat())
-			//if err := positionFile.Set(fileStat, fileInfo.Size()); err != nil { // TODO option?
-			if err := positionFile.Set(fileStat, 0); err != nil {
+			if err := positionFile.Set(fileStat, initialOffset); err != nil {
 				return errAndClose(err)
 			}
 		} else {

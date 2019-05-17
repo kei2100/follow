@@ -9,6 +9,7 @@ import (
 type option struct {
 	rotatedFilePathPatterns []string
 	positionFile            posfile.PositionFile
+	readFromHead            bool
 	optionFollowRotate
 }
 
@@ -23,15 +24,17 @@ type OptionFunc func(o *option)
 
 // Default values
 const (
-	DefaultFollowRotate        = true
-	DefaultWatchRotateInterval = 100 * time.Millisecond
 	DefaultDetectRotateDelay   = 5 * time.Second
+	DefaultFollowRotate        = true
+	DefaultReadFromHead        = false
+	DefaultWatchRotateInterval = 100 * time.Millisecond
 )
 
 func (o *option) apply(opts ...OptionFunc) {
-	o.followRotate = DefaultFollowRotate
-	o.watchRotateInterval = DefaultWatchRotateInterval
 	o.detectRotateDelay = DefaultDetectRotateDelay
+	o.followRotate = DefaultFollowRotate
+	o.readFromHead = DefaultReadFromHead
+	o.watchRotateInterval = DefaultWatchRotateInterval
 	for _, fn := range opts {
 		fn(o)
 	}
@@ -74,6 +77,13 @@ func WithDetectRotateDelay(v time.Duration) OptionFunc {
 func WithFollowRotate(follow bool) OptionFunc {
 	return func(o *option) {
 		o.followRotate = follow
+	}
+}
+
+// WithReadFromHead let you change readFromHead
+func WithReadFromHead(v bool) OptionFunc {
+	return func(o *option) {
+		o.readFromHead = v
 	}
 }
 
