@@ -135,7 +135,7 @@ func openAndFollowReadDuration(duration time.Duration) <-chan []byte {
 
 	go func() {
 		defer close(ch)
-		r, err := follow.Open(filepath.Join(tempDir, logName), followReaderOptions()...)
+		r, err := openFollowReader()
 		if err != nil {
 			panic(err)
 		}
@@ -157,6 +157,22 @@ func openAndFollowReadDuration(duration time.Duration) <-chan []byte {
 	}()
 
 	return ch
+}
+
+func openFollowReader() (*follow.Reader, error) {
+	for numRetry, maxRetry := 0, 3; numRetry <= maxRetry; numRetry++ {
+		r, err := follow.Open(filepath.Join(tempDir, logName), followReaderOptions()...)
+		if err != nil {
+			if os.IsNotExist(err) {
+				// may be rotating?
+				time.Sleep(time.Millisecond)
+				continue
+			}
+			return nil, err
+		}
+		return r, nil
+	}
+	return nil, os.ErrNotExist
 }
 
 func followReaderOptions() []follow.OptionFunc {

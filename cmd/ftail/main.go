@@ -38,16 +38,17 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
-	pf, err := follow.WithPositionFilePath(positionFilePath)
-	if err != nil {
-		panic(err)
+
+	opts := []follow.OptionFunc{follow.WithRotatedFilePathPatterns(strings.Split(rotatedFilePatterns, ","))}
+	if positionFilePath != "" {
+		pf, err := follow.WithPositionFilePath(positionFilePath)
+		if err != nil {
+			panic(err)
+		}
+		opts = append(opts, pf)
 	}
 
-	r, err := follow.Open(
-		subject,
-		pf,
-		follow.WithRotatedFilePathPatterns(strings.Split(rotatedFilePatterns, ",")),
-	)
+	r, err := follow.Open(subject, opts...)
 	if err != nil {
 		panic(err)
 	}
