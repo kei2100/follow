@@ -4,6 +4,7 @@ package file
 
 import "os"
 
-func openFile(name string, flag int, perm os.FileMode) (*os.File, error) {
-	return os.OpenFile(name, flag, perm)
+// Open opens the named file for reading and following.
+func Open(name string) (*os.File, error) {
+	return os.OpenFile(name, os.O_RDONLY, 0)
 }
