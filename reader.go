@@ -5,12 +5,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"time"
-
-	"github.com/kei2100/follow/stat"
 
 	"github.com/kei2100/follow/file"
 	"github.com/kei2100/follow/logger"
+	"github.com/kei2100/follow/stat"
+
 	"github.com/kei2100/follow/posfile"
 )
 
@@ -101,113 +103,159 @@ func Open(name string, opts ...OptionFunc) (*Reader, error) {
 	return newReader(f, name, positionFile, opt.optionFollowRotate), nil
 }
 
+const (
+	sNormal int32 = iota
+	sReadRemaining
+	sRotating
+)
+
 // Reader is a file reader that behaves like tail -F
 type Reader struct {
-	file           *os.File
+	fu             *fileUnit
+	state          int32
 	followFilePath string
-	positionFile   posfile.PositionFile
+	opt            optionFollowRotate
 	closed         chan struct{}
-
-	opt                   optionFollowRotate
-	rotated               <-chan struct{}
-	rotatedRemainingBytes chan int64
+	rotated        chan struct{}
 }
 
 func newReader(file *os.File, followFilePath string, positionFile posfile.PositionFile, opt optionFollowRotate) *Reader {
+	fu := newFileUnit(file, positionFile)
 	closed := make(chan struct{})
+	rotated := make(chan struct{})
+	watchRotate(closed, rotated, fu, followFilePath, opt)
 	return &Reader{
-		file:                  file,
-		followFilePath:        followFilePath,
-		positionFile:          positionFile,
-		closed:                closed,
-		opt:                   opt,
-		rotated:               watchRotate(closed, file, followFilePath, opt),
-		rotatedRemainingBytes: make(chan int64, 1),
+		fu:             fu,
+		state:          sNormal,
+		followFilePath: followFilePath,
+		opt:            opt,
+		closed:         closed,
+		rotated:        rotated,
 	}
 }
 
 // Read reads up to len(b) bytes from the File.
 func (r *Reader) Read(p []byte) (n int, err error) {
-	select {
-	default:
-		n, err := r.file.Read(p)
-		if err != nil {
-			return 0, err
+	switch atomic.LoadInt32(&r.state) {
+	case sNormal:
+		select {
+		default:
+			return r.fu.readFile(p)
+		case <-r.rotated:
+			atomic.StoreInt32(&r.state, sReadRemaining)
+			return r.Read(p)
 		}
-		if err := r.positionFile.IncreaseOffset(n); err != nil {
-			return n, err
+
+	case sReadRemaining:
+		n, err := r.fu.readFile(p)
+		if err == nil {
+			return n, nil
 		}
-		return n, nil
-
-	case <-r.rotated:
-		r.rotated = nil
-
-		// read remaining bytes from rotated files
-		fi, err := r.file.Stat()
-		if err != nil {
-			return 0, err
-		}
-		remainingBytes := fi.Size() - r.positionFile.Offset()
-		r.rotatedRemainingBytes <- remainingBytes
-		return r.Read(p)
-
-	case remainingBytes := <-r.rotatedRemainingBytes:
-		n, err := r.Read(p)
 		if err != nil && err != io.EOF {
 			return n, err
 		}
-		if err != io.EOF {
-			remainingBytes -= int64(n)
-			if remainingBytes > 0 {
-				r.rotatedRemainingBytes <- remainingBytes
-				return n, nil
-			}
+		// io.EOF (= finish read remaining bytes from rotated file)
+		// switch reading to the next file
+		if !atomic.CompareAndSwapInt32(&r.state, sReadRemaining, sRotating) {
+			// ensure that switching the file is performed by single goroutine
+			return 0, io.EOF
 		}
-
-		// finish read remaining bytes from rotated file
-		// open new file
-		if err := r.file.Close(); err != nil {
-			return n, err
-		}
-		f, err := file.Open(r.followFilePath)
+		next, err := file.Open(r.followFilePath)
 		if err != nil {
-			return n, err
+			atomic.StoreInt32(&r.state, sReadRemaining)
+			logger.Printf("follow: failed to open the next file. wait for switching the file until next reading: %+v", err)
+			return 0, io.EOF
 		}
-		st, err := stat.Stat(f)
-		if err != nil {
-			return n, err
+		if err := r.fu.switchFile(next); err != nil {
+			atomic.StoreInt32(&r.state, sReadRemaining)
+			logger.Printf("follow: failed to switching the file. wait until next reading: %+v", err)
+			return 0, io.EOF
 		}
-		r.file = f
-		if err := r.positionFile.Set(st, 0); err != nil {
-			return n, err
-		}
-		r.rotated = watchRotate(r.closed, r.file, r.followFilePath, r.opt)
+		watchRotate(r.closed, r.rotated, r.fu, r.followFilePath, r.opt)
+		atomic.StoreInt32(&r.state, sNormal)
+		return r.Read(p)
 
-		switch {
-		case len(p) == n:
-			return n, nil
-		case len(p) > n:
-			pp := p[n:]
-			nn, err := r.Read(pp)
-			return n + nn, err
-		default:
-			logger.Fatalf("follow: unexpected read bytes size %d and bind bytes size %d", len(p), n)
-			return n, nil
-		}
+	case sRotating:
+		return 0, io.EOF
+
+	default:
+		return 0, fmt.Errorf("follow: unexpected state %d", atomic.LoadInt32(&r.state))
 	}
 }
 
 // Close closes the follow.Reader.
 func (r *Reader) Close() error {
-	if r.closed != nil {
-		close(r.closed)
-	}
-	if err := r.positionFile.Close(); err != nil {
+	close(r.closed)
+	return r.fu.close()
+}
+
+type fileUnit struct {
+	f  *os.File
+	pf posfile.PositionFile
+	mu sync.Mutex
+}
+
+func newFileUnit(f *os.File, pf posfile.PositionFile) *fileUnit {
+	return &fileUnit{f: f, pf: pf}
+}
+
+func (fu *fileUnit) close() error {
+	fu.mu.Lock()
+	defer fu.mu.Unlock()
+
+	if err := fu.pf.Close(); err != nil {
 		logger.Printf("follow: an error occurred while closing the positionFile: %+v", err)
 	}
-	if err := r.file.Close(); err != nil {
+	return fu.f.Close()
+}
+
+func (fu *fileUnit) fileInfo() (os.FileInfo, error) {
+	fu.mu.Lock()
+	defer fu.mu.Unlock()
+	return fu.f.Stat()
+}
+
+func (fu *fileUnit) fileName() string {
+	fu.mu.Lock()
+	defer fu.mu.Unlock()
+	return fu.f.Name()
+}
+
+func (fu *fileUnit) positionFileInfo() (fileStat *stat.FileStat, offset int64) {
+	fu.mu.Lock()
+	defer fu.mu.Unlock()
+	return fu.pf.FileStat(), fu.pf.Offset()
+}
+
+func (fu *fileUnit) readFile(p []byte) (int, error) {
+	fu.mu.Lock()
+	defer fu.mu.Unlock()
+
+	n, err := fu.f.Read(p)
+	if err != nil {
+		return n, err
+	}
+	if err := fu.pf.IncreaseOffset(n); err != nil {
+		return n, err
+	}
+	return n, nil
+}
+
+func (fu *fileUnit) switchFile(next *os.File) error {
+	fu.mu.Lock()
+	defer fu.mu.Unlock()
+
+	st, err := stat.Stat(next)
+	if err != nil {
 		return err
 	}
+	if err := fu.pf.Set(st, 0); err != nil {
+		return err
+	}
+	if err := fu.f.Close(); err != nil {
+		logger.Printf("follow: an error occurred while closing the file: %+v", err)
+	}
+	fu.f = next
 	return nil
 }
 
@@ -254,12 +302,14 @@ func findSameFile(globPatterns []string, findStat *stat.FileStat) (*os.File, *st
 	return nil, nil, nil, os.ErrNotExist
 }
 
-func watchRotate(done chan struct{}, file *os.File, followFilePath string, opt optionFollowRotate) (rotated <-chan struct{}) {
+func watchRotate(done, notify chan struct{}, fu *fileUnit, followFilePath string, opt optionFollowRotate) {
 	if !opt.followRotate {
-		return nil
+		return
 	}
-
-	notify := make(chan struct{})
+	fileInfo, err := fu.fileInfo()
+	if err != nil {
+		logger.Printf("follow: failed to get FileStat %s on watchRotate: %+v", fu.fileName(), err)
+	}
 
 	go func() {
 		tick := time.NewTicker(opt.watchRotateInterval)
@@ -269,10 +319,13 @@ func watchRotate(done chan struct{}, file *os.File, followFilePath string, opt o
 			case <-done:
 				return
 			case <-tick.C:
-				fileInfo, err := file.Stat()
-				if err != nil {
-					logger.Printf("follow: failed to get FileStat %s on watchRotate: %+v", file.Name(), err)
-					continue
+				if fileInfo == nil {
+					var err error
+					fileInfo, err = fu.fileInfo()
+					if err != nil {
+						logger.Printf("follow: failed to get FileStat %s on watchRotate: %+v", fu.fileName(), err)
+						continue
+					}
 				}
 				currentInfo, err := os.Stat(followFilePath)
 				if err != nil {
@@ -284,12 +337,13 @@ func watchRotate(done chan struct{}, file *os.File, followFilePath string, opt o
 				}
 				if !os.SameFile(fileInfo, currentInfo) {
 					<-time.After(opt.detectRotateDelay)
-					close(notify)
+					select {
+					case notify <- struct{}{}:
+					case <-done:
+					}
 					return
 				}
 			}
 		}
 	}()
-
-	return notify
 }

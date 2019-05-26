@@ -1,6 +1,7 @@
 package follow
 
 import (
+	"bytes"
 	"io"
 	"io/ioutil"
 	"os"
@@ -9,10 +10,8 @@ import (
 	"time"
 
 	"github.com/kei2100/follow/internal/testutil"
-
-	"github.com/kei2100/follow/stat"
-
 	"github.com/kei2100/follow/posfile"
+	"github.com/kei2100/follow/stat"
 )
 
 func TestNoPositionFile(t *testing.T) {
@@ -29,16 +28,16 @@ func TestNoPositionFile(t *testing.T) {
 		defer r.Close()
 
 		f.WriteString("foo")
-		wantRead(t, r, "fo")
-		wantPositionFile(t, r.positionFile, fileStat, 2)
+		wantRead(t, r, "fo", 10*time.Millisecond, time.Second)
+		wantPositionFile(t, r, fileStat, 2)
 
-		wantRead(t, r, "o")
+		wantRead(t, r, "o", 10*time.Millisecond, time.Second)
 		wantReadAll(t, r, "")
-		wantPositionFile(t, r.positionFile, fileStat, 3)
+		wantPositionFile(t, r, fileStat, 3)
 
 		f.WriteString("bar")
 		wantReadAll(t, r, "bar")
-		wantPositionFile(t, r.positionFile, fileStat, 6)
+		wantPositionFile(t, r, fileStat, 6)
 	})
 
 	t.Run("After rotate", func(t *testing.T) {
@@ -66,13 +65,14 @@ func TestNoPositionFile(t *testing.T) {
 				defer current.Close()
 				current.WriteString("current")
 
-				wantDetectRotate(t, r, 500*time.Millisecond)
-				wantRead(t, r, "ol")
-				wantPositionFile(t, r.positionFile, oldStat, 2)
-				wantRead(t, r, "d")
-				wantPositionFile(t, r.positionFile, currentStat, 0)
-				wantReadAll(t, r, "current")
-				wantPositionFile(t, r.positionFile, currentStat, 7)
+				wantRead(t, r, "ol", 10*time.Millisecond, time.Second)
+				wantPositionFile(t, r, oldStat, 2)
+				wantRead(t, r, "d", 10*time.Millisecond, time.Second)
+				wantPositionFile(t, r, oldStat, 3)
+				wantRead(t, r, "curr", 10*time.Millisecond, time.Second)
+				wantPositionFile(t, r, currentStat, 4)
+				wantRead(t, r, "ent", 10*time.Millisecond, time.Second)
+				wantPositionFile(t, r, currentStat, 7)
 			})
 
 			t.Run("Exist old file", func(t *testing.T) {
@@ -96,115 +96,41 @@ func TestNoPositionFile(t *testing.T) {
 					defer current.Close()
 					current.WriteString("current")
 
-					wantDetectRotate(t, r, 500*time.Millisecond)
-					wantRead(t, r, "c")
-					wantPositionFile(t, r.positionFile, currentStat, 1)
-					wantReadAll(t, r, "urrent")
-					wantPositionFile(t, r.positionFile, currentStat, 7)
+					wantRead(t, r, "c", 10*time.Millisecond, time.Second)
+					wantPositionFile(t, r, currentStat, 1)
+					wantRead(t, r, "urrent", 10*time.Millisecond, time.Second)
+					wantPositionFile(t, r, currentStat, 7)
 				})
 
 				t.Run("Exist remaining bytes", func(t *testing.T) {
-					t.Run("Fixed renaming bytes", func(t *testing.T) {
-						t.Parallel()
+					t.Parallel()
 
-						td := testutil.CreateTempDir()
-						defer td.RemoveAll()
+					td := testutil.CreateTempDir()
+					defer td.RemoveAll()
 
-						old, oldStat := td.CreateFile("test.log")
-						oldc := testutil.OnceCloser{C: old}
-						defer oldc.Close()
+					old, oldStat := td.CreateFile("test.log")
+					oldc := testutil.OnceCloser{C: old}
+					defer oldc.Close()
 
-						r := mustOpenReader(old.Name(), WithWatchRotateInterval(10*time.Millisecond), WithDetectRotateDelay(0))
-						defer r.Close()
+					r := mustOpenReader(old.Name(), WithWatchRotateInterval(10*time.Millisecond), WithDetectRotateDelay(0))
+					defer r.Close()
 
-						old.WriteString("old")
-						oldc.Close()
-						mustRename(old.Name(), old.Name()+".bk")
+					old.WriteString("old")
+					oldc.Close()
+					mustRename(old.Name(), old.Name()+".bk")
 
-						current, currentStat := td.CreateFile(filepath.Base(old.Name()))
-						defer current.Close()
-						current.WriteString("current")
+					current, currentStat := td.CreateFile(filepath.Base(old.Name()))
+					defer current.Close()
+					current.WriteString("current")
 
-						wantDetectRotate(t, r, 500*time.Millisecond)
-						wantRead(t, r, "ol")
-						wantPositionFile(t, r.positionFile, oldStat, 2)
-						wantRead(t, r, "d")
-						wantPositionFile(t, r.positionFile, currentStat, 0)
-						wantReadAll(t, r, "current")
-						wantPositionFile(t, r.positionFile, currentStat, 7)
-					})
-
-					t.Run("Increase remaining bytes", func(t *testing.T) {
-						t.Parallel()
-
-						td := testutil.CreateTempDir()
-						defer td.RemoveAll()
-
-						old, oldStat := td.CreateFile("test.log")
-						oldc := testutil.OnceCloser{C: old}
-						defer oldc.Close()
-
-						r := mustOpenReader(old.Name(), WithWatchRotateInterval(10*time.Millisecond), WithDetectRotateDelay(0))
-						defer r.Close()
-
-						old.WriteString("old")
-						oldc.Close()
-						mustRename(old.Name(), old.Name()+".bk")
-
-						current, currentStat := td.CreateFile(filepath.Base(old.Name()))
-						defer current.Close()
-						current.WriteString("current")
-
-						wantDetectRotate(t, r, 500*time.Millisecond)
-						wantRead(t, r, "ol")
-						wantPositionFile(t, r.positionFile, oldStat, 2)
-
-						// increase
-						old = mustOpenfile(old.Name()+".bk", os.O_APPEND|os.O_WRONLY)
-						defer old.Close()
-						old.WriteString("maybeIgnored")
-
-						wantRead(t, r, "d")
-						wantPositionFile(t, r.positionFile, currentStat, 0)
-						wantReadAll(t, r, "current")
-						wantPositionFile(t, r.positionFile, currentStat, 7)
-					})
-
-					t.Run("Decrease remaining bytes", func(t *testing.T) {
-						t.Parallel()
-
-						td := testutil.CreateTempDir()
-						defer td.RemoveAll()
-
-						old, oldStat := td.CreateFile("test.log")
-						oldc := testutil.OnceCloser{C: old}
-						defer oldc.Close()
-
-						r := mustOpenReader(old.Name(), WithWatchRotateInterval(10*time.Millisecond), WithDetectRotateDelay(0))
-						defer r.Close()
-
-						old.WriteString("old")
-						oldc.Close()
-						mustRename(old.Name(), old.Name()+".bk")
-
-						current, currentStat := td.CreateFile(filepath.Base(old.Name()))
-						defer current.Close()
-						current.WriteString("current")
-
-						wantDetectRotate(t, r, 500*time.Millisecond)
-						wantRead(t, r, "ol")
-						wantPositionFile(t, r.positionFile, oldStat, 2)
-
-						// decrease
-						old = mustOpenfile(old.Name()+".bk", os.O_TRUNC|os.O_WRONLY)
-						defer old.Close()
-						old.WriteString("ol")
-
-						wantRead(t, r, "c")
-						wantPositionFile(t, r.positionFile, currentStat, 1)
-						wantReadAll(t, r, "urrent")
-						wantPositionFile(t, r.positionFile, currentStat, 7)
-					})
+					wantRead(t, r, "ol", 10*time.Millisecond, time.Second)
+					wantPositionFile(t, r, oldStat, 2)
+					wantRead(t, r, "d", 10*time.Millisecond, time.Second)
+					wantPositionFile(t, r, oldStat, 3)
+					wantRead(t, r, "c", 10*time.Millisecond, time.Second)
+					wantPositionFile(t, r, currentStat, 1)
+					wantRead(t, r, "urrent", 10*time.Millisecond, time.Second)
+					wantPositionFile(t, r, currentStat, 7)
 				})
 			})
 		})
@@ -227,9 +153,8 @@ func TestNoPositionFile(t *testing.T) {
 				fc.Close()
 				mustRename(f.Name(), f.Name()+".bk")
 
-				wantNoDetectRotate(t, r, 500*time.Millisecond)
 				wantReadAll(t, r, "file")
-				wantPositionFile(t, r.positionFile, fileStat, 4)
+				wantPositionFile(t, r, fileStat, 4)
 			})
 
 			t.Run("Exists new file", func(t *testing.T) {
@@ -254,13 +179,12 @@ func TestNoPositionFile(t *testing.T) {
 					defer current.Close()
 					current.WriteString("current")
 
-					wantDetectRotate(t, r, 500*time.Millisecond)
-					wantReadAll(t, r, "oldcurrent")
-					wantPositionFile(t, r.positionFile, currentStat, 7)
+					wantRead(t, r, "oldcurrent", 10*time.Millisecond, time.Second)
+					wantPositionFile(t, r, currentStat, 7)
 
 					current.WriteString("grow")
 					wantReadAll(t, r, "grow")
-					wantPositionFile(t, r.positionFile, currentStat, 11)
+					wantPositionFile(t, r, currentStat, 11)
 				})
 
 				t.Run("Rotate Again", func(t *testing.T) {
@@ -277,20 +201,21 @@ func TestNoPositionFile(t *testing.T) {
 					defer r.Close()
 
 					f1.WriteString("f1")
+
+					wantRead(t, r, "f", 10*time.Millisecond, time.Second)
+					wantPositionFile(t, r, f1Stat, 1)
+
 					f1c.Close()
 					mustRename(f1.Name(), f1.Name()+".bk")
 
 					f2, f2Stat := td.CreateFile(filepath.Base(f1.Name()))
 					f2c := testutil.OnceCloser{C: f2}
 					defer f2c.Close()
-
-					wantDetectRotate(t, r, 500*time.Millisecond)
-					wantRead(t, r, "f")
-					wantPositionFile(t, r.positionFile, f1Stat, 1)
-					wantRead(t, r, "1")
-					wantPositionFile(t, r.positionFile, f2Stat, 0)
-
 					f2.WriteString("f2")
+
+					wantRead(t, r, "1f", 10*time.Millisecond, time.Second)
+					wantPositionFile(t, r, f2Stat, 1)
+
 					f2c.Close()
 					mustRename(f2.Name(), f2.Name()+".bk")
 
@@ -298,13 +223,8 @@ func TestNoPositionFile(t *testing.T) {
 					defer f3.Close()
 					f3.WriteString("f3")
 
-					wantDetectRotate(t, r, 500*time.Millisecond)
-					wantRead(t, r, "f")
-					wantPositionFile(t, r.positionFile, f2Stat, 1)
-					wantRead(t, r, "2")
-					wantPositionFile(t, r.positionFile, f3Stat, 0)
-					wantRead(t, r, "f3")
-					wantPositionFile(t, r.positionFile, f3Stat, 2)
+					wantRead(t, r, "2f3", 10*time.Millisecond, time.Second)
+					wantPositionFile(t, r, f3Stat, 2)
 				})
 			})
 		})
@@ -328,10 +248,15 @@ func TestNoPositionFile(t *testing.T) {
 		current, _ := td.CreateFile(filepath.Base(old.Name()))
 		defer current.Close()
 
-		wantNoDetectRotate(t, r, 500*time.Millisecond)
 		current.WriteString("foo")
 		wantReadAll(t, r, "")
-		wantPositionFile(t, r.positionFile, oldStat, 0)
+		time.Sleep(100 * time.Millisecond)
+		wantReadAll(t, r, "")
+		time.Sleep(100 * time.Millisecond)
+		wantReadAll(t, r, "")
+		time.Sleep(100 * time.Millisecond)
+		wantReadAll(t, r, "")
+		wantPositionFile(t, r, oldStat, 0)
 	})
 
 	t.Run("Follow Rotate DetectRotateDelay", func(t *testing.T) {
@@ -344,7 +269,7 @@ func TestNoPositionFile(t *testing.T) {
 		oldc := testutil.OnceCloser{C: old}
 		defer oldc.Close()
 
-		r := mustOpenReader(old.Name(), WithWatchRotateInterval(10*time.Millisecond), WithDetectRotateDelay(500*time.Millisecond))
+		r := mustOpenReader(old.Name(), WithWatchRotateInterval(10*time.Millisecond), WithDetectRotateDelay(time.Second))
 		defer r.Close()
 
 		old.WriteString("foo")
@@ -354,13 +279,14 @@ func TestNoPositionFile(t *testing.T) {
 		defer current.Close()
 
 		wantReadAll(t, r, "foo")
-		wantPositionFile(t, r.positionFile, oldStat, 3)
+		wantPositionFile(t, r, oldStat, 3)
 
-		wantNoDetectRotate(t, r, 100*time.Millisecond)
-		wantDetectRotate(t, r, time.Second)
+		time.Sleep(100 * time.Millisecond)
+		wantReadAll(t, r, "")
+
 		current.WriteString("barbaz")
-		wantReadAll(t, r, "barbaz")
-		wantPositionFile(t, r.positionFile, currentStat, 6)
+		wantRead(t, r, "barbaz", 10*time.Millisecond, 3*time.Second)
+		wantPositionFile(t, r, currentStat, 6)
 	})
 }
 
@@ -380,11 +306,11 @@ func TestWithPositionFile(t *testing.T) {
 		defer r.Close()
 
 		wantReadAll(t, r, "r")
-		wantPositionFile(t, r.positionFile, fileStat, 3)
+		wantPositionFile(t, r, fileStat, 3)
 
 		f.WriteString("baz")
 		wantReadAll(t, r, "baz")
-		wantPositionFile(t, r.positionFile, fileStat, 6)
+		wantPositionFile(t, r, fileStat, 6)
 	})
 
 	t.Run("Incorrect offset", func(t *testing.T) {
@@ -402,7 +328,7 @@ func TestWithPositionFile(t *testing.T) {
 		defer r.Close()
 
 		wantReadAll(t, r, "")
-		wantPositionFile(t, r.positionFile, fileStat, 3)
+		wantPositionFile(t, r, fileStat, 3)
 	})
 
 	t.Run("Same file not found", func(t *testing.T) {
@@ -427,11 +353,11 @@ func TestWithPositionFile(t *testing.T) {
 			defer r.Close()
 
 			wantReadAll(t, r, "")
-			wantPositionFile(t, r.positionFile, currentStat, 0)
+			wantPositionFile(t, r, currentStat, 0)
 
 			current.WriteString("bar")
 			wantReadAll(t, r, "bar")
-			wantPositionFile(t, r.positionFile, currentStat, 3)
+			wantPositionFile(t, r, currentStat, 3)
 		})
 
 		t.Run("Rotated file found", func(t *testing.T) {
@@ -467,12 +393,13 @@ func TestWithPositionFile(t *testing.T) {
 			)
 			defer r.Close()
 
-			wantDetectRotate(t, r, 500*time.Millisecond)
-			wantReadAll(t, r, "arbaz")
-			wantPositionFile(t, r.positionFile, bazStat, 3)
+			wantRead(t, r, "arbaz", 10*time.Millisecond, time.Second)
+			wantPositionFile(t, r, bazStat, 3)
 		})
 	})
 }
+
+// TODO multi thread test
 
 func mustOpenReader(name string, opt ...OptionFunc) *Reader {
 	r, err := Open(name, opt...)
@@ -480,14 +407,6 @@ func mustOpenReader(name string, opt ...OptionFunc) *Reader {
 		panic(err)
 	}
 	return r
-}
-
-func mustOpenfile(name string, flag int) *os.File {
-	f, err := os.OpenFile(name, flag, 0600)
-	if err != nil {
-		panic(err)
-	}
-	return f
 }
 
 func mustRemoveFile(name string) {
@@ -502,43 +421,45 @@ func mustRename(oldname, newname string) {
 	}
 }
 
-func wantPositionFile(t *testing.T, positionFile posfile.PositionFile, wantFileStat *stat.FileStat, wantOffset int64) {
+func wantRead(t *testing.T, r *Reader, want string, interval, timeout time.Duration) {
 	t.Helper()
 
-	if !stat.SameFile(positionFile.FileStat(), wantFileStat) {
-		t.Errorf("fileStat not same")
-	}
-	if g, w := positionFile.Offset(), wantOffset; g != w {
-		t.Errorf("offset got %v, want %v", g, w)
-	}
-}
+	tick := time.NewTicker(interval)
+	defer tick.Stop()
+	to := time.After(timeout)
+	var buf bytes.Buffer
 
-func wantRead(t *testing.T, reader *Reader, want string) {
-	t.Helper()
-
-	if want == "" {
-		return
-	}
-
-	var got string
-	for len(got) != len(want) {
-		b := make([]byte, len(want)-len(got))
-		n, err := reader.Read(b)
-		if err != nil {
-			if err != io.EOF {
-				t.Errorf("failed to read: %v", err)
-			}
-			break
+	for {
+		b := make([]byte, len(want)-buf.Len())
+		n, err := r.Read(b)
+		if err != nil && err != io.EOF {
+			t.Errorf("failed to read %+v", err)
+			return
 		}
-		got += string(b[:n])
-	}
-
-	if g, w := got, want; g != w {
-		t.Errorf("byteString got %v, want %v", g, w)
+		if n > 0 {
+			buf.Write(b[:n])
+		}
+		if buf.Len() > len(want) {
+			t.Errorf("unexpected read bytes %d, want %s", n, want)
+			return
+		}
+		if buf.Len() == len(want) {
+			if g, w := buf.String(), want; g != w {
+				t.Errorf("got %v, want %v", g, w)
+			}
+			return
+		}
+		select {
+		case <-to:
+			t.Errorf("timeout %s exceeded. got %s, want %s", timeout, buf.String(), want)
+			return
+		case <-tick.C:
+			continue
+		}
 	}
 }
 
-func wantReadAll(t *testing.T, reader *Reader, want string) {
+func wantReadAll(t *testing.T, reader io.Reader, want string) {
 	t.Helper()
 
 	b, err := ioutil.ReadAll(reader)
@@ -554,24 +475,14 @@ func wantReadAll(t *testing.T, reader *Reader, want string) {
 	}
 }
 
-func wantDetectRotate(t *testing.T, reader *Reader, timeout time.Duration) {
+func wantPositionFile(t *testing.T, r *Reader, wantFileStat *stat.FileStat, wantOffset int64) {
 	t.Helper()
 
-	select {
-	case <-reader.rotated:
-		return
-	case <-time.After(timeout):
-		t.Errorf("%s timeout while waiting for detect rotate", timeout)
+	fileStat, offset := r.fu.positionFileInfo()
+	if !stat.SameFile(fileStat, wantFileStat) {
+		t.Errorf("fileStat not same")
 	}
-}
-
-func wantNoDetectRotate(t *testing.T, reader *Reader, wait time.Duration) {
-	t.Helper()
-
-	select {
-	case <-reader.rotated:
-		t.Errorf("detect rotate. want not detect")
-	case <-time.After(wait):
-		return
+	if g, w := offset, wantOffset; g != w {
+		t.Errorf("offset got %v, want %v", g, w)
 	}
 }
