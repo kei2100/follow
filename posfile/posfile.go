@@ -3,7 +3,6 @@ package posfile
 import (
 	"encoding/gob"
 	"os"
-	"sync"
 
 	"github.com/kei2100/follow/stat"
 )
@@ -55,7 +54,6 @@ func Open(name string) (PositionFile, error) {
 type positionFile struct {
 	f *os.File
 	entry
-	mu sync.RWMutex
 }
 
 func (pf *positionFile) Close() error {
@@ -63,14 +61,10 @@ func (pf *positionFile) Close() error {
 }
 
 func (pf *positionFile) FileStat() *stat.FileStat {
-	pf.mu.RLock()
-	defer pf.mu.RUnlock()
 	return pf.entry.FileStat
 }
 
 func (pf *positionFile) Offset() int64 {
-	pf.mu.RLock()
-	defer pf.mu.RUnlock()
 	return pf.entry.Offset
 }
 
@@ -79,9 +73,6 @@ func (pf *positionFile) IncreaseOffset(incr int) error {
 }
 
 func (pf *positionFile) Set(fileStat *stat.FileStat, offset int64) error {
-	pf.mu.Lock()
-	defer pf.mu.Unlock()
-
 	pf.entry.FileStat = fileStat
 	pf.entry.Offset = offset
 
@@ -105,12 +96,11 @@ func (pf *positionFile) SetFileStat(fileStat *stat.FileStat) error {
 
 // InMemory creates a inMemory PositionFile
 func InMemory(fileStat *stat.FileStat, offset int64) PositionFile {
-	return &inMemory{entry: entry{FileStat: fileStat, Offset: offset}}
+	return &inMemory{entry{FileStat: fileStat, Offset: offset}}
 }
 
 type inMemory struct {
 	entry
-	mu sync.RWMutex
 }
 
 func (pf *inMemory) Close() error {
@@ -118,14 +108,10 @@ func (pf *inMemory) Close() error {
 }
 
 func (pf *inMemory) FileStat() *stat.FileStat {
-	pf.mu.RLock()
-	defer pf.mu.RUnlock()
 	return pf.entry.FileStat
 }
 
 func (pf *inMemory) Offset() int64 {
-	pf.mu.RLock()
-	defer pf.mu.RUnlock()
 	return pf.entry.Offset
 }
 
@@ -134,9 +120,6 @@ func (pf *inMemory) IncreaseOffset(incr int) error {
 }
 
 func (pf *inMemory) Set(fileStat *stat.FileStat, offset int64) error {
-	pf.mu.Lock()
-	defer pf.mu.Unlock()
-
 	pf.entry.FileStat = fileStat
 	pf.entry.Offset = offset
 	return nil
