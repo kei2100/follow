@@ -13,6 +13,7 @@ import (
 	"github.com/kei2100/follow/posfile"
 )
 
+// TODO fix
 func ExampleOpen() {
 	// create tempfile.
 	file, _ := ioutil.TempFile("", "*.log")
