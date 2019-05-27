@@ -2,10 +2,12 @@ package follow
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -399,7 +401,49 @@ func TestWithPositionFile(t *testing.T) {
 	})
 }
 
-// TODO multi thread test
+func TestMultiThreaded(t *testing.T) {
+	t.Parallel()
+
+	td := testutil.CreateTempDir()
+	defer td.RemoveAll()
+
+	old, oldStat := td.CreateFile("test.log")
+	oldc := testutil.OnceCloser{C: old}
+	defer oldc.Close()
+
+	r := mustOpenReader(old.Name(), WithWatchRotateInterval(10*time.Millisecond), WithDetectRotateDelay(0))
+	defer r.Close()
+
+	const nGoroutines = 10
+	var wg sync.WaitGroup
+
+	wg.Add(nGoroutines)
+	for i := 0; i < nGoroutines; i++ {
+		fmt.Fprint(old, "a")
+		go func() {
+			defer wg.Done()
+			wantRead(t, r, "a", 10*time.Millisecond, time.Second)
+		}()
+	}
+	wg.Wait()
+	wantPositionFile(t, r, oldStat, 10)
+
+	oldc.Close()
+	os.Rename(old.Name(), old.Name()+".bk")
+	current, currentStat := td.CreateFile(filepath.Base(old.Name()))
+	defer current.Close()
+
+	wg.Add(nGoroutines)
+	for i := 0; i < nGoroutines; i++ {
+		fmt.Fprint(current, "b")
+		go func() {
+			defer wg.Done()
+			wantRead(t, r, "b", 10*time.Millisecond, time.Second)
+		}()
+	}
+	wg.Wait()
+	wantPositionFile(t, r, currentStat, 10)
+}
 
 func mustOpenReader(name string, opt ...OptionFunc) *Reader {
 	r, err := Open(name, opt...)
