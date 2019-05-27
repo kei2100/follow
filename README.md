@@ -5,46 +5,57 @@
 A file Reader that behaves like `tail -F`
 
 ```go
-func ExampleOpen() {
-	// create tempfile.
-	file, _ := ioutil.TempFile("", "*.log")
-	filename := file.Name()
+func ExampleReader() {
+	dir, _ := ioutil.TempDir("", "follow-test")
+	path := filepath.Join(dir, "test.log")
+	f1, _ := os.Create(path)
 
 	// create follow.Reader.
-	// follow.Reader is a file Reader that behaves like `tail -F`.
+	// follow.Reader is a file Reader that behaves like `tail -F`
 	options := []follow.OptionFunc{
-		// position-file supported.
+		// position-file supported
 		follow.WithPositionFile(posfile.InMemory(nil, 0)),
-		follow.WithRotatedFilePathPatterns([]string{filename + ".*"}),
+		follow.WithRotatedFilePathPatterns([]string{filepath.Join(dir, "*.log.*")}),
 		follow.WithDetectRotateDelay(0),
+		follow.WithWatchRotateInterval(100 * time.Millisecond),
 	}
-	reader, _ := follow.Open(filename, options...)
+	reader, _ := follow.Open(path, options...)
 
-	// write and read
-	file.WriteString("1")
-	wantReadString(reader, "1")
-
-	file.WriteString("2")
-	wantReadString(reader, "2")
+	f1.WriteString("1")
+	b, _ := ioutil.ReadAll(reader)
+	fmt.Printf("%s\n", b)
 
 	// rotate
-	file.Close()
-	os.Rename(filename, filename+".1")
+	f1.Close()
+	os.Rename(path, path+".f1")
+	f2, _ := os.Create(path)
 
-	file, _ = os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	file.WriteString("3")
-	wantReadString(reader, "3")
+	f2.WriteString("2")
+	time.Sleep(500 * time.Millisecond) // wait for detect rotate
+	b, _ = ioutil.ReadAll(reader)
+	fmt.Printf("%s\n", b)
 
-	// write and rotate while closing the reader
+	// write and rotate while closing the follow.Reader
 	reader.Close()
-	file.WriteString("4")
-	file.Close()
-	os.Rename(filename, filename+".2")
+	f2.WriteString("3")
+	f2.Close()
 
-	file, _ = os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	file.WriteString("5")
+	os.Rename(path, path+".f2")
+	f3, _ := os.Create(path)
+	defer f3.Close()
+	f3.WriteString("4")
 
-	reader, _ = follow.Open(filename, options...)
-	wantReadString(reader, "45")
+	// re-open follow.Reader
+	reader, _ = follow.Open(path, options...)
+	defer reader.Close()
+
+	time.Sleep(500 * time.Millisecond) // wait for detect rotate
+	b, _ = ioutil.ReadAll(reader)
+	fmt.Printf("%s\n", b)
+
+	// Output:
+	// 1
+	// 2
+	// 34
 }
 ```
