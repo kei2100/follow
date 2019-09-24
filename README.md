@@ -2,7 +2,7 @@
 [![CircleCI](https://circleci.com/gh/kei2100/follow.svg?style=svg)](https://circleci.com/gh/kei2100/follow)
 [![Build status](https://ci.appveyor.com/api/projects/status/yeisq4p3nfghx4j3/branch/master?svg=true)](https://ci.appveyor.com/project/kei2100/follow/branch/master)
 
-An io.Reader that behaves like `tail -F`
+A file Reader that behaves like `tail -F`
 
 ```go
 func ExampleReader() {
