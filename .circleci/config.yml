@@ -8,7 +8,7 @@ workflows:
 executors:
   standard:
     docker:
-      - image: circleci/golang:1.13.0
+      - image: circleci/golang:1.14.1
 
 commands:
   printenv:
