@@ -1,6 +1,6 @@
 os: Visual Studio 2019
 
-stack: go 1.14
+stack: go 1.15
 
 clone_folder: C:\follow
 
