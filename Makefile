@@ -9,9 +9,9 @@ endif
 .PHONY: setup
 
 setup:
-	go get -u golang.org/x/tools/cmd/goimports
-	go get -u golang.org/x/lint/golint
-	go get -u github.com/rakyll/gotest
+	go install golang.org/x/tools/cmd/goimports@latest
+	go install golang.org/x/lint/golint@latest
+	go install github.com/rakyll/gotest@latest
 	go mod tidy
 
 # development tasks
