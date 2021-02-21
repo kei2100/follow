@@ -14,7 +14,11 @@ install:
   - gcc --version
 
   - choco install -y make
-  - make setup
+# FIXME use `make setup` instead of `go get` when the stack supports go 1.16
+#  - make setup
+  - go get -u golang.org/x/tools/cmd/goimports
+  - go get -u golang.org/x/lint/golint
+  - go get -u github.com/rakyll/gotest
 
 before_build:
   - make lint vet
