@@ -1,6 +1,6 @@
 os: Visual Studio 2019
 
-stack: go 1.15
+stack: go 1.16
 
 clone_folder: C:\follow
 
@@ -14,11 +14,7 @@ install:
   - gcc --version
 
   - choco install -y make
-# FIXME use `make setup` instead of `go get` when the stack supports go 1.16
-#  - make setup
-  - go get -u golang.org/x/tools/cmd/goimports
-  - go get -u golang.org/x/lint/golint
-  - go get -u github.com/rakyll/gotest
+  - make setup
 
 before_build:
   - make lint vet
