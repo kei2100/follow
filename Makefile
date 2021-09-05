@@ -14,7 +14,6 @@ setup:
 	$(GO) install golang.org/x/tools/cmd/goimports@latest
 	$(GO) install golang.org/x/lint/golint@latest
 	$(GO) install github.com/rakyll/gotest@latest
-	$(GO) mod tidy
 
 # development tasks
 .PHONY: fmt lint vet test test.nocache
