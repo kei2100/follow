@@ -1,35 +1,33 @@
 version: 2.1
 
+orbs:
+  go: circleci/go@1.7.0
+
 workflows:
   standard:
     jobs:
     - test
 
-executors:
-  standard:
-    docker:
-      - image: circleci/golang:1.16.0
+jobs:
+  test:
+    executor:
+      name: go/default
+      tag: '1.17'
+    steps:
+      - checkout
+      - printenv
+      - go/load-cache
+      - go/mod-download
+      - run: make setup
+      - go/save-cache
+      - lint
+      - run: make test
 
 commands:
   printenv:
     steps:
     - run: go version
     - run: go env
-
-  setup:
-    steps:
-    - restore_cache:
-        keys:
-        - go-mod-v1-{{ checksum "go.sum" }}
-        - go-mod-v1-
-
-    - run: make setup
-    - run: go mod download
-
-    - save_cache:
-        key: go-mod-v1-{{ checksum "go.sum" }}
-        paths:
-        - /go/pkg/mod/cache
 
   lint:
     steps:
@@ -40,13 +38,3 @@ commands:
         key: lint-v1-{{ .Revision }}
         paths:
         - .circleci/lintok
-
-jobs:
-  test:
-    executor: standard
-    steps:
-      - checkout
-      - printenv
-      - setup
-      - lint
-      - run: make test
