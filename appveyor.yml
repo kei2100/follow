@@ -1,13 +1,13 @@
 os: Visual Studio 2019
 
-stack: go 1.16
+stack: go 1.17
 
 clone_folder: C:\follow
 
 environment:
   GOPATH: C:\gopath
   PATH: C:\gopath\bin;C:\msys64\mingw64\bin\;C:\Program Files (x86)\NSIS\;%PATH%
-  GO: go1.17
+  GO: go1.18
 
 install:
   - go get golang.org/dl/%GO%
