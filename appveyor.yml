@@ -10,7 +10,7 @@ environment:
   GO: go1.18
 
 install:
-  - go get golang.org/dl/%GO%
+  - go install golang.org/dl/%GO%@latest
   - '%GO% download'
 
   - choco install -y make
