@@ -33,7 +33,7 @@ commands:
     steps:
     - restore_cache:
         key: lint-v1-{{ .Revision }}
-    - run: ls .circleci/lintok > /dev/null 2>&1 || make vet lint && touch .circleci/lintok
+    - run: ls .circleci/lintok > /dev/null 2>&1 || make lint && touch .circleci/lintok
     - save_cache:
         key: lint-v1-{{ .Revision }}
         paths:

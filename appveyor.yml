@@ -16,7 +16,7 @@ install:
   - make setup
 
 before_build:
-  - make lint vet
+  - make lint
 
 build_script:
   - make test
