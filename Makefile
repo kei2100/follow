@@ -12,20 +12,16 @@ endif
 
 setup:
 	$(GO) install golang.org/x/tools/cmd/goimports@latest
-	$(GO) install golang.org/x/lint/golint@latest
 	$(GO) install github.com/rakyll/gotest@latest
 
 # development tasks
-.PHONY: fmt lint vet test test.nocache
+.PHONY: fmt lint test test.nocache
 
 fmt:
 	goimports -w .
 
 lint:
 	goimports -d . | $(GREP) "^" && exit 1 || exit 0
-	golint -set_exit_status $(PACKAGES)
-
-vet:
 	$(GO) vet $(PACKAGES)
 
 test:
