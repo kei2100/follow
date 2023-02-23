@@ -12,7 +12,6 @@ endif
 
 setup:
 	$(GO) install golang.org/x/tools/cmd/goimports@latest
-	$(GO) install github.com/rakyll/gotest@latest
 
 # development tasks
 .PHONY: fmt lint test test.nocache
@@ -25,7 +24,7 @@ lint:
 	$(GO) vet $(PACKAGES)
 
 test:
-	gotest -v -race $(PACKAGES)
+	$(GO) test -race $(PACKAGES)
 
 test.nocache:
-	gotest -count=1 -v -race $(PACKAGES)
+	$(GO) test -count=1 -race $(PACKAGES)
