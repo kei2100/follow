@@ -73,7 +73,7 @@ func TestE2E(t *testing.T) {
 }
 
 func mkTempDir() string {
-	dir, err := ioutil.TempDir("", "follow")
+	dir, err := os.MkdirTemp("", "follow")
 	if err != nil {
 		panic(err)
 	}
@@ -165,7 +165,7 @@ func openFollowReader() (*follow.Reader, error) {
 		if err != nil {
 			if os.IsNotExist(err) {
 				// may be rotating?
-				time.Sleep(time.Millisecond)
+				time.Sleep(10 * time.Millisecond)
 				continue
 			}
 			return nil, err
