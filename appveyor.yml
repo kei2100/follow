@@ -1,16 +1,17 @@
-image: Visual Studio 2019
+image: Visual Studio 2022
 
 clone_folder: C:\follow
 
 environment:
   GOPATH: C:\gopath
   PATH: C:\gopath\bin;C:\msys64\mingw64\bin\;C:\Program Files (x86)\NSIS\;%PATH%
-  GO: go1.21.3
+  GO: go1.22.0
 
 install:
   - go install golang.org/dl/%GO%@latest
   - '%GO% download'
-  - go env
+  # comment out for workaround https://github.com/golang/go/issues/61455
+  # - go env
 
   - choco install -y make
   - make setup
