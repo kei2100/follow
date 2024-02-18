@@ -10,7 +10,8 @@ environment:
 install:
   - go install golang.org/dl/%GO%@latest
   - '%GO% download'
-  - go env
+  # comment out for workaround https://github.com/golang/go/issues/61455
+  # - go env
 
   - choco install -y make
   - make setup
