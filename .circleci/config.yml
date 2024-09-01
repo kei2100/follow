@@ -13,6 +13,8 @@ jobs:
     executor:
       name: go/default
       tag: '1.22'
+    environment:
+      GOTOOLCHAIN: go1.23.0
     steps:
       - checkout
       - printenv
