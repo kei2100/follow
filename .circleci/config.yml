@@ -14,7 +14,7 @@ jobs:
       name: go/default
       tag: '1.22'
     environment:
-      GOTOOLCHAIN: go1.23.0
+      GOTOOLCHAIN: go1.25.0
     steps:
       - checkout
       - printenv
