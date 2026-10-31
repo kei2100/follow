@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  go: circleci/go@1.7.2
+  go: circleci/go@4.0.3
 
 workflows:
   standard:
@@ -12,16 +12,16 @@ jobs:
   test:
     executor:
       name: go/default
-      tag: '1.22'
+      tag: '1.27'
     environment:
       GOTOOLCHAIN: go1.27.3
     steps:
       - checkout
       - printenv
-      - go/load-cache
+      - go/load-mod-cache
       - go/mod-download
       - run: make setup
-      - go/save-cache
+      - go/save-mod-cache
       - lint
       - run: make test
 
